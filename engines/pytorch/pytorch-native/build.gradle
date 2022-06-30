@@ -76,9 +76,9 @@ def downloadBuildAndroid(String ver) {
 }
 
 def prepareNativeLib(String binaryRoot, String ver) {
-    if (!System.properties['os.name'].toLowerCase(Locale.ROOT).contains("mac")) {
-        throw new GradleException("This command must be run from osx")
-    }
+//    if (!System.properties['os.name'].toLowerCase(Locale.ROOT).contains("mac")) {
+//        throw new GradleException("This command must be run from osx")
+//    }
 
     def officialPytorchUrl = "https://download.pytorch.org/libtorch"
     def aarch64PytorchUrl = "https://djl-ai.s3.amazonaws.com/publish/pytorch"
@@ -108,11 +108,14 @@ def prepareNativeLib(String binaryRoot, String ver) {
     copyNativeLibToOutputDir(aarch64Files, binaryRoot, aarch64PytorchUrl)
 
 
-    exec {
-        commandLine 'install_name_tool', '-add_rpath', '@loader_path', "${binaryRoot}/cpu/osx-x86_64/native/lib/libtorch_cpu.dylib"
-    }
-    exec {
-        commandLine 'install_name_tool', '-add_rpath', '@loader_path', "${binaryRoot}/cpu/osx-x86_64/native/lib/libtorch.dylib"
+    // TODO: check if necessary
+    if (System.properties['os.name'].toLowerCase(Locale.ROOT).contains("mac")) {
+        exec {
+            commandLine 'install_name_tool', '-add_rpath', '@loader_path', "${binaryRoot}/cpu/osx-x86_64/native/lib/libtorch_cpu.dylib"
+        }
+        exec {
+            commandLine 'install_name_tool', '-add_rpath', '@loader_path', "${binaryRoot}/cpu/osx-x86_64/native/lib/libtorch.dylib"
+        }
     }
 }
 
@@ -293,12 +296,15 @@ flavorNames.each { flavor ->
     platformNames.each { osName ->
         tasks.create(name: "${flavor}-${osName}Jar", type: Jar) {
             doFirst {
-                def propFile = file("${BINARY_ROOT}/pytorch.properties")
+                // TODO DHA: change name depending on platform
+                def propFile = file("${BINARY_ROOT}/pytorch-${flavor}-${osName}.properties")
                 propFile.delete()
                 def dsStore = file("${BINARY_ROOT}/${flavor}/${osName}/native/lib/.DS_Store")
                 dsStore.delete()
 
-                def versionName = String.format("${project.version}-%s", new Date().format('yyyyMMdd'))
+                // TODO DHA: Why are they appending this here?
+//                def versionName = String.format("${project.version}-%s", new Date().format('yyyyMMdd'))
+                def versionName = "${project.version}"
                 def dir = file("${BINARY_ROOT}/${flavor}/${osName}/native/lib")
                 def sb = new StringBuilder()
                 sb.append("version=${versionName}\nflavor=${flavor}\nclassifier=${osName}\nlibraries=")
@@ -328,7 +334,8 @@ flavorNames.each { flavor ->
             from("${BINARY_ROOT}/${flavor}/${osName}/native/lib") {
                 into("pytorch/${flavor}/${osName}")
             }
-            from("${BINARY_ROOT}/pytorch.properties") {
+            // TODO DHA: change name depending on platform
+            from("${BINARY_ROOT}/pytorch-${flavor}-${osName}.properties") {
                 into("native/lib")
             }
             from "src/main/resources"

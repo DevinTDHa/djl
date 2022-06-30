@@ -13,6 +13,7 @@
 package ai.djl.util;
 
 import ai.djl.util.cuda.CudaUtils;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
@@ -39,7 +40,7 @@ public final class Platform {
     /**
      * Returns the platform that matches current operating system.
      *
-     * @param engine the name of the engine
+     * @param engine          the name of the engine
      * @param overrideVersion the version of the engine
      * @return the platform that matches current operating system
      */
@@ -56,7 +57,16 @@ public final class Platform {
      * @return the platform that matches current operating system
      */
     public static Platform detectPlatform(String engine) {
-        String nativeProp = "native/lib/" + engine + ".properties";
+        Platform systemPlatform = Platform.fromSystem(engine);
+//        String nativeProp = "native/lib/" + engine + ".properties";
+        // TODO: only for pytorch
+        String nativeProp = String.format(
+          "native/lib/%s-%s-%s-%s.properties",
+          engine,
+          systemPlatform.getFlavor(),
+          systemPlatform.getOsPrefix(),
+          systemPlatform.getOsArch());
+
         Enumeration<URL> urls;
         try {
             urls = ClassLoaderUtils.getContextClassLoader().getResources(nativeProp);
@@ -64,7 +74,6 @@ public final class Platform {
             throw new AssertionError("Failed to list property files.", e);
         }
 
-        Platform systemPlatform = Platform.fromSystem(engine);
         Platform placeholder = null;
         while (urls.hasMoreElements()) {
             URL url = urls.nextElement();
@@ -103,7 +112,7 @@ public final class Platform {
             platform.version = prop.getProperty("version");
             if (platform.version == null) {
                 throw new IllegalArgumentException(
-                        "version key is required in <engine>.properties file.");
+                  "version key is required in <engine>.properties file.");
             }
             platform.placeholder = prop.getProperty("placeholder") != null;
             String flavor = prop.getProperty("flavor");
@@ -282,8 +291,8 @@ public final class Platform {
         if (system.flavor.startsWith("cu")) {
             // system flavor doesn't contain mkl, but MXNet has: cu110mkl
             return flavor.startsWith("cpu")
-                    || "mkl".equals(flavor)
-                    || flavor.startsWith(system.flavor.substring(0, 4));
+              || "mkl".equals(flavor)
+              || flavor.startsWith(system.flavor.substring(0, 4));
         }
         return flavor.startsWith("cpu") || "mkl".equals(flavor);
     }
