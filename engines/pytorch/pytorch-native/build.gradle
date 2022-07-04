@@ -75,13 +75,13 @@ def downloadBuildAndroid(String ver) {
     }
 }
 
-def prepareNativeLib(String binaryRoot, String ver) {
+def prepareNativeLib(String binaryRoot, String ver, String flavor) {
 //    if (!System.properties['os.name'].toLowerCase(Locale.ROOT).contains("mac")) {
 //        throw new GradleException("This command must be run from osx")
 //    }
 
     def officialPytorchUrl = "https://download.pytorch.org/libtorch"
-    def aarch64PytorchUrl = "https://djl-ai.s3.amazonaws.com/publish/pytorch"
+//    def aarch64PytorchUrl = "https://djl-ai.s3.amazonaws.com/publish/pytorch"
     String cu11
     if (ver.startsWith("1.8.") || ver.startsWith("1.9.")) {
         cu11 = "cu111"
@@ -89,23 +89,32 @@ def prepareNativeLib(String binaryRoot, String ver) {
         cu11 = "cu113"
     }
 
-    def files = [
-            "cpu/libtorch-cxx11-abi-shared-with-deps-${ver}%2Bcpu.zip"        : "cpu/linux-x86_64",
-            "cpu/libtorch-macos-${ver}.zip"                                   : "cpu/osx-x86_64",
-            "cpu/libtorch-win-shared-with-deps-${ver}%2Bcpu.zip"              : "cpu/win-x86_64",
-            "cu102/libtorch-cxx11-abi-shared-with-deps-${ver}%2Bcu102.zip"    : "cu102/linux-x86_64",
-            "${cu11}/libtorch-cxx11-abi-shared-with-deps-${ver}%2B${cu11}.zip": "${cu11}/linux-x86_64",
-            "${cu11}/libtorch-win-shared-with-deps-${ver}%2B${cu11}.zip"      : "${cu11}/win-x86_64",
-            "cpu/libtorch-shared-with-deps-${ver}%2Bcpu.zip"                  : "cpu-precxx11/linux-x86_64",
-            "${cu11}/libtorch-shared-with-deps-${ver}%2B${cu11}.zip"          : "${cu11}-precxx11/linux-x86_64"
-    ]
+    LinkedHashMap<String, String> files
+    if (flavor == "cpu") {
+        files = [
+                "cpu/libtorch-cxx11-abi-shared-with-deps-${ver}%2Bcpu.zip": "cpu/linux-x86_64",
+                "cpu/libtorch-macos-${ver}.zip"                           : "cpu/osx-x86_64",
+                "cpu/libtorch-win-shared-with-deps-${ver}%2Bcpu.zip"      : "cpu/win-x86_64",
+                "cpu/libtorch-shared-with-deps-${ver}%2Bcpu.zip"          : "cpu-precxx11/linux-x86_64"
+        ]
+    } else if (flavor == "cu102") {
+        files = ["cu102/libtorch-cxx11-abi-shared-with-deps-${ver}%2Bcu102.zip": "cu102/linux-x86_64"]
+    } else if (flavor == "cu111" || flavor == "cu113" ){
+        files = [
+                "${cu11}/libtorch-cxx11-abi-shared-with-deps-${ver}%2B${cu11}.zip": "${cu11}/linux-x86_64",
+                "${cu11}/libtorch-win-shared-with-deps-${ver}%2B${cu11}.zip"      : "${cu11}/win-x86_64",
+                "${cu11}/libtorch-shared-with-deps-${ver}%2B${cu11}.zip"          : "${cu11}-precxx11/linux-x86_64"
+        ]
+    } else {
+        throw new IllegalStateException("Unknown flavor: ${flavor}")
+    }
 
-    def aarch64Files = [
-            "${ver}/libtorch-shared-with-deps-${ver}-aarch64.zip": "cpu-precxx11/linux-aarch64"
-    ]
+//    def aarch64Files = [
+//            "${ver}/libtorch-shared-with-deps-${ver}-aarch64.zip": "cpu-precxx11/linux-aarch64"
+//    ]
 
     copyNativeLibToOutputDir(files, binaryRoot, officialPytorchUrl)
-    copyNativeLibToOutputDir(aarch64Files, binaryRoot, aarch64PytorchUrl)
+//    copyNativeLibToOutputDir(aarch64Files, binaryRoot, aarch64PytorchUrl)
 
 
     // TODO: check if necessary
@@ -248,14 +257,14 @@ publishing.repositories {
 
 task downloadPyTorchNativeLib() {
     doLast {
-        prepareNativeLib("${BINARY_ROOT}", "${VERSION}")
+        prepareNativeLib("${BINARY_ROOT}", "${VERSION}", "${FLAVOR}")
     }
 }
 
 task uploadS3 {
     doLast {
         delete "${BINARY_ROOT}"
-        prepareNativeLib("${BINARY_ROOT}", "${VERSION}")
+        prepareNativeLib("${BINARY_ROOT}", "${VERSION}", "${FLAVOR}")
 
         exec {
             commandLine "sh", "-c", "find ${BINARY_ROOT} -type f | xargs gzip"
@@ -296,13 +305,12 @@ flavorNames.each { flavor ->
     platformNames.each { osName ->
         tasks.create(name: "${flavor}-${osName}Jar", type: Jar) {
             doFirst {
-                // TODO DHA: change name depending on platform
                 def propFile = file("${BINARY_ROOT}/pytorch-${flavor}-${osName}.properties")
                 propFile.delete()
                 def dsStore = file("${BINARY_ROOT}/${flavor}/${osName}/native/lib/.DS_Store")
                 dsStore.delete()
 
-                // TODO DHA: Why are they appending this here?
+                // TODO Commented out. Why are they appending it in the first place?
 //                def versionName = String.format("${project.version}-%s", new Date().format('yyyyMMdd'))
                 def versionName = "${project.version}"
                 def dir = file("${BINARY_ROOT}/${flavor}/${osName}/native/lib")
@@ -334,7 +342,7 @@ flavorNames.each { flavor ->
             from("${BINARY_ROOT}/${flavor}/${osName}/native/lib") {
                 into("pytorch/${flavor}/${osName}")
             }
-            // TODO DHA: change name depending on platform
+
             from("${BINARY_ROOT}/pytorch-${flavor}-${osName}.properties") {
                 into("native/lib")
             }
