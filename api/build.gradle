@@ -1,3 +1,7 @@
+plugins {
+    id "com.github.johnrengelman.shadow" version "7.1.2"  // Gradle version of Maven's Shade plugin
+}
+
 dependencies {
     api "com.google.code.gson:gson:${gson_version}"
     api "net.java.dev.jna:jna:${jna_version}"
